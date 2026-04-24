@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>QuizPortal</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    .fill-blank-input {
+      display:inline-block; width:160px; background:transparent;
+      border-bottom:2px solid #475569; color:#e2e8f0; padding:2px 6px;
+      font-size:inherit; transition:border-color .2s;
+    }
+    .fill-blank-input:focus { outline:none; border-bottom-color:#3b82f6; }
+    .timer-warn { animation:pulse 1s ease-in-out infinite; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.5} }
+    label:has(input[type=radio]:checked) {
+      border-color:#3b82f6 !important;
+      background:rgba(59,130,246,.12) !important;
+    }
+  </style>
+</head>
+<body class="bg-slate-900 text-slate-200 min-h-screen">
+
+<!-- WELCOME -->
+<div id="s-welcome" class="min-h-screen flex items-center justify-center p-4">
+  <div class="w-full max-w-md bg-slate-800 border border-slate-700 rounded-2xl shadow-2xl p-8">
+    <div class="text-center mb-8">
+      <div class="text-5xl mb-3">📋</div>
+      <h1 class="text-2xl font-bold text-white">QuizPortal</h1>
+    </div>
+    <div class="space-y-4">
+      <div>
+        <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1">Your Full Name</label>
+        <input id="inp-name" type="text" placeholder="e.g. Priya Sharma"
+          class="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 transition"
+          onkeydown="if(event.key==='Enter') startQuiz()"/>
+      </div>
+      <div>
+        <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1">Select Assessment</label>
+        <div id="asm-loading" class="flex items-center gap-2 text-slate-500 text-sm py-2">
+          <div class="w-4 h-4 border-2 border-slate-600 border-t-blue-400 rounded-full animate-spin"></div>
+          Loading…
+        </div>
+        <select id="inp-asm" class="hidden w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-blue-500 transition"></select>
+        <p id="no-asm" class="hidden text-yellow-400 text-sm py-2">No assessments available. Ask your admin.</p>
+      </div>
+      <div class="bg-slate-700/40 rounded-xl p-3 space-y-1 text-xs text-slate-400">
+        <div>⏱ 25-minute strict countdown</div>
+        <div>📋 Up to 7 random questions</div>
+        <div>💾 Refresh-safe — progress is saved</div>
+      </div>
+      <button onclick="startQuiz()"
+        class="w-full bg-blue-600 hover:bg-blue-500 text-white font-semibold py-3 rounded-lg transition-colors">
+        Start Assessment →
+      </button>
+    </div>
+    <p id="w-err" class="hidden text-red-400 text-sm mt-3 text-center"></p>
+  </div>
+</div>
+
+<!-- LOADING -->
+<div id="s-loading" class="hidden min-h-screen flex flex-col items-center justify-center gap-4">
+  <div class="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+  <p id="load-msg" class="text-slate-400">Loading…</p>
+</div>
+
+<!-- QUIZ -->
+<div id="s-quiz" class="hidden min-h-screen p-4 pb-12">
+  <div class="max-w-2xl mx-auto">
+    <div class="flex items-center justify-between mb-4 pt-2">
+      <div>
+        <p class="text-white font-semibold text-sm" id="q-asm-name"></p>
+        <p class="text-slate-500 text-xs mt-0.5"><span id="q-agent"></span> · <span id="q-prog">Q 1/7</span></p>
+      </div>
+      <div id="timer-box" class="flex items-center gap-2 bg-slate-800 border border-slate-700 rounded-xl px-4 py-2">
+        <span class="text-red-400">⏱</span>
+        <span id="timer-txt" class="font-mono font-bold text-lg text-red-400">25:00</span>
+      </div>
+    </div>
+    <div class="w-full bg-slate-800 rounded-full h-1.5 mb-6">
+      <div id="prog-bar" class="bg-blue-500 h-1.5 rounded-full transition-all" style="width:0%"></div>
+    </div>
+    <div class="bg-slate-800 border border-slate-700 rounded-2xl p-6 mb-4">
+      <!-- Assigned identifier (shown only if assessment has identifiers) -->
+      <div id="q-id-box" class="hidden bg-indigo-950/60 border border-indigo-700/50 rounded-xl px-4 py-3 mb-5 flex items-center justify-between">
+        <div>
+          <p id="q-id-label" class="text-xs text-indigo-400 uppercase tracking-widest mb-0.5">Reference ID</p>
+          <p id="q-id-value" class="font-mono text-indigo-200 font-semibold text-base"></p>
+        </div>
+        <span class="text-xs bg-indigo-800/50 text-indigo-300 border border-indigo-600/40 px-2 py-1 rounded-full">Assigned to you</span>
+      </div>
+      <p class="text-xs text-slate-500 uppercase tracking-widest mb-2">Question</p>
+      <div id="q-text" class="text-white text-base leading-relaxed mb-6"></div>
+      <div id="q-ans"></div>
+    </div>
+    <div class="flex gap-3">
+      <button id="btn-prev" onclick="prevQ()" class="hidden px-5 py-3 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm font-medium transition-colors">← Prev</button>
+      <button id="btn-next" onclick="nextQ()" class="flex-1 bg-blue-600 hover:bg-blue-500 text-white font-semibold py-3 rounded-lg transition-colors">Next →</button>
+      <button id="btn-sub"  onclick="submitQuiz()" class="hidden flex-1 bg-green-600 hover:bg-green-500 text-white font-semibold py-3 rounded-lg transition-colors">Submit ✓</button>
+    </div>
+    <p id="q-err" class="hidden text-red-400 text-sm mt-3 text-center"></p>
+  </div>
+</div>
+
+<!-- RESULTS -->
+<div id="s-results" class="hidden min-h-screen p-4 pb-16">
+  <div class="max-w-2xl mx-auto text-center pt-10 mb-6">
+    <div id="r-emoji" class="text-6xl mb-4">🏆</div>
+    <h2 class="text-3xl font-bold text-white mb-1">Complete!</h2>
+    <p id="r-agent" class="text-slate-400 text-sm"></p>
+    <p id="r-asm"   class="text-slate-500 text-xs mt-0.5"></p>
+    <div class="mt-5 inline-block bg-slate-800 border border-slate-700 rounded-2xl px-10 py-5">
+      <p class="text-slate-400 text-sm mb-1">Score</p>
+      <p id="r-score" class="text-5xl font-bold text-white"></p>
+      <p id="r-pct"   class="text-slate-400 mt-1 text-sm"></p>
+    </div>
+    <!-- correct / wrong pill summary -->
+    <div class="mt-4 flex items-center justify-center gap-3 text-sm">
+      <span id="r-correct-count" class="flex items-center gap-1.5 bg-green-900/40 border border-green-700/40 text-green-400 px-3 py-1 rounded-full"></span>
+      <span id="r-wrong-count"   class="flex items-center gap-1.5 bg-red-900/40   border border-red-700/40   text-red-400   px-3 py-1 rounded-full"></span>
+    </div>
+  </div>
+  <div class="max-w-2xl mx-auto">
+    <!-- filter tabs -->
+    <div class="flex gap-2 mb-4">
+      <button id="rf-all"     onclick="filterResults('all')"     class="px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-600 text-white transition-colors">All</button>
+      <button id="rf-wrong"   onclick="filterResults('wrong')"   class="px-3 py-1.5 text-xs font-medium rounded-lg bg-slate-700 text-slate-400 hover:bg-slate-600 transition-colors">❌ Wrong</button>
+      <button id="rf-right"   onclick="filterResults('right')"   class="px-3 py-1.5 text-xs font-medium rounded-lg bg-slate-700 text-slate-400 hover:bg-slate-600 transition-colors">✅ Correct</button>
+      <button id="rf-pending" onclick="filterResults('pending')" class="px-3 py-1.5 text-xs font-medium rounded-lg bg-slate-700 text-slate-400 hover:bg-slate-600 transition-colors">⏳ Pending</button>
+    </div>
+    <div id="r-review" class="space-y-3"></div>
+  </div>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+import {
+  getDatabase, ref, push, get, runTransaction
+} from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+
+const cfg = {
+  apiKey:            "AIzaSyDU1iRMbM6PoPaZDwNqPzAlvvswMtcRAxU",
+  authDomain:        "freshdesk-p1-timer.firebaseapp.com",
+  databaseURL:       "https://freshdesk-p1-timer-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId:         "freshdesk-p1-timer",
+  storageBucket:     "freshdesk-p1-timer.firebasestorage.app",
+  messagingSenderId: "964831674348",
+  appId:             "1:964831674348:web:adeb29c8c72a7cd0874ac9"
+};
+
+const app = initializeApp(cfg);
+const db  = getDatabase(app);
+const $   = id => document.getElementById(id);
+
+// ── helpers ────────────────────────────────────────
+function snap2arr(snap) {
+  if (!snap.exists()) return [];
+  return Object.entries(snap.val()).map(([id, v]) => ({ id, ...v }));
+}
+function shuffle(a) {
+  const b = [...a];
+  for (let i = b.length-1; i>0; i--) {
+    const j = Math.floor(Math.random()*(i+1));
+    [b[i],b[j]] = [b[j],b[i]];
+  }
+  return b;
+}
+function fmt(s) { return `${String(Math.floor(s/60)).padStart(2,"0")}:${String(s%60).padStart(2,"0")}`; }
+function screen(id) {
+  ["s-welcome","s-loading","s-quiz","s-results"].forEach(s => $(s).classList.toggle("hidden", s!==id));
+}
+function err(id,msg) { const e=$(id); e.textContent=msg; e.classList.remove("hidden"); }
+
+// ── state ───────────────────────────────────────────
+let agentName="", asmId="", asmName="", asmSettings={};
+let assignedIdentifierQ = null;  // the identifier question assigned to this agent
+let questions=[], qi=0, answers={}, tLeft=1500, tick=null;
+
+// ── boot ────────────────────────────────────────────
+(async function init() {
+  const sn = localStorage.getItem("agentName");
+  const sq = localStorage.getItem("q_qs");
+  if (sn && sq) { resumeQuiz(); return; }
+  screen("s-welcome");
+  try {
+    const snap = await get(ref(db,"assessments"));
+    const list = snap2arr(snap).sort((a,b)=>(a.name||"").localeCompare(b.name||""));
+    $("asm-loading").classList.add("hidden");
+    if (!list.length) { $("no-asm").classList.remove("hidden"); return; }
+    const sel = $("inp-asm");
+    sel.innerHTML = `<option value="">— Choose assessment —</option>`;
+    list.forEach(a => { const o=document.createElement("option"); o.value=a.id; o.textContent=a.name; sel.appendChild(o); });
+    sel.classList.remove("hidden");
+  } catch(e) {
+    $("asm-loading").classList.add("hidden");
+    err("w-err", "DB error: "+e.message);
+  }
+})();
+
+// ── start ───────────────────────────────────────────
+window.startQuiz = async () => {
+  const name = $("inp-name").value.trim();
+  const sel  = $("inp-asm");
+  const aid  = sel.value;
+  const aname = sel.options[sel.selectedIndex]?.text || "";
+  if (!name) { err("w-err","Enter your name."); return; }
+  if (!aid)  { err("w-err","Select an assessment."); return; }
+
+  agentName = name; asmId = aid; asmName = aname;
+  screen("s-loading");
+
+  try {
+    // ── One-attempt check ─────────────────────────────────────────
+    const subSnap = await get(ref(db,"submissions"));
+    const allSubs = subSnap.exists() ? Object.values(subSnap.val()) : [];
+    const asmSubs = allSubs.filter(s => s.asmId === aid);
+
+    const already = asmSubs.find(
+      s => s.agentName?.toLowerCase().trim() === name.toLowerCase().trim()
+    );
+    if (already) {
+      screen("s-welcome");
+      err("w-err", `"${name}" already submitted this assessment (score: ${already.score}/${already.total}). One attempt per agent.`);
+      return;
+    }
+
+    localStorage.setItem("agentName", name);
+
+    // ── Load assessment settings ───────────────────────────────────
+    const asmSnap = await get(ref(db,`assessments/${aid}`));
+    asmSettings   = asmSnap.exists() ? asmSnap.val() : {};
+
+    // ── Load questions ────────────────────────────────────────────
+    const snap = await get(ref(db,"questions"));
+    const all  = snap2arr(snap).filter(q => q.assessmentId === aid);
+    if (!all.length) throw new Error("No questions found for this assessment.");
+
+    // Split into identifier questions and regular questions
+    const idQs  = all.filter(q => q.isIdentifier);
+    const regQs = all.filter(q => !q.isIdentifier);
+
+    // ── Atomic counter for round-robin ───────────────────────────
+    // runTransaction increments BEFORE questions are selected, so even if
+    // 100 agents start simultaneously each gets a unique slot.
+    // The old asmSubs.length approach broke because submissions only exist
+    // after completion — concurrent starters all saw the same count.
+    let agentSlot = 0;
+    await runTransaction(ref(db, `assessments/${aid}/startCount`), current => {
+      agentSlot = (current || 0);   // capture BEFORE increment
+      return agentSlot + 1;
+    });
+
+    // Group-based round-robin with idQCount limit:
+    //
+    // idQCount (from assessment settings) = how many identifier questions per agent.
+    // Groups rotate so consecutive agents don't get the same group.
+    //
+    //   4 groups: [Intent, Revocable, QR, Debit],  idQCount=1
+    //   Slot 0 → Intent[slot%n]
+    //   Slot 1 → Revocable[slot%n]
+    //   Slot 2 → QR[slot%n]
+    //   Slot 3 → Debit[slot%n]
+    //   Slot 4 → Intent[slot%n]  (wraps)
+    //
+    //   idQCount=2, Slot 0 → Intent[0%n], Revocable[0%n]
+    //              Slot 1 → Revocable[1%n], QR[1%n]
+    //              Slot 2 → QR[2%n], Debit[2%n]
+    const groupMap = {};
+    idQs.forEach(q => {
+      const g = (q.identifierGroup || "__ungrouped__").trim();
+      if (!groupMap[g]) groupMap[g] = [];
+      groupMap[g].push(q);
+    });
+    const groupList  = Object.values(groupMap);     // array of arrays
+    const idQCount   = Math.min(asmSettings.idQCount || 1, groupList.length);
+    const assignedIdQs = [];
+    for (let i = 0; i < idQCount; i++) {
+      const groupQs = groupList[(agentSlot + i) % groupList.length];
+      assignedIdQs.push(groupQs[agentSlot % groupQs.length]);
+    }
+    // Keep for results screen
+    assignedIdentifierQ = assignedIdQs[0] || null;
+
+    const qCount   = asmSettings.qCount || 7;
+    const doRand   = asmSettings.randomize !== false;
+    // Regular questions fill the remaining slots: total - identifier count
+    const regCount = Math.max(0, qCount - assignedIdQs.length);
+    const regPool  = doRand ? shuffle(regQs) : regQs;
+    const selected = regPool.slice(0, regCount);
+
+    // Identifier questions come first so agent sees them immediately
+    questions = [...assignedIdQs, ...selected];
+    qi=0; answers={};
+    tLeft = (asmSettings.timer || 25) * 60;
+
+    localStorage.setItem("q_qs",       JSON.stringify(questions));
+    localStorage.setItem("q_aid",      aid);
+    localStorage.setItem("q_an",       asmName);
+    localStorage.setItem("q_settings", JSON.stringify(asmSettings));
+    localStorage.setItem("q_idq",      JSON.stringify(assignedIdentifierQ));
+    beginQuiz();
+  } catch(e) {
+    screen("s-welcome");
+    err("w-err", e.message);
+  }
+};
+
+function resumeQuiz() {
+  agentName           = localStorage.getItem("agentName");
+  asmId               = localStorage.getItem("q_aid");
+  asmName             = localStorage.getItem("q_an");
+  asmSettings         = JSON.parse(localStorage.getItem("q_settings") || "{}");
+  assignedIdentifierQ = JSON.parse(localStorage.getItem("q_idq") || "null");
+  questions           = JSON.parse(localStorage.getItem("q_qs"));
+  qi              = parseInt(localStorage.getItem("q_qi") || "0");
+  tLeft           = parseInt(localStorage.getItem("q_t")  || String((asmSettings.timer||25)*60));
+  answers         = JSON.parse(localStorage.getItem("q_a") || "{}");
+  beginQuiz();
+}
+
+function beginQuiz() {
+  screen("s-quiz");
+  $("q-agent").textContent    = agentName;
+  $("q-asm-name").textContent = asmName;
+  renderQ(); startTimer();
+}
+
+// ── timer ───────────────────────────────────────────
+function startTimer() {
+  clearInterval(tick);
+  renderTimer();
+  tick = setInterval(()=>{ tLeft--; localStorage.setItem("q_t",tLeft); renderTimer(); if(tLeft<=0){clearInterval(tick);autoSub();} },1000);
+}
+function renderTimer() {
+  $("timer-txt").textContent = fmt(tLeft);
+  if (tLeft<=300) { $("timer-txt").classList.add("timer-warn"); $("timer-box").classList.add("border-red-500/50"); }
+}
+
+// ── render question ─────────────────────────────────
+function renderQ() {
+  const q=questions[qi], tot=questions.length, saved=answers[qi];
+  $("q-prog").textContent = `Q ${qi+1}/${tot}`;
+  $("prog-bar").style.width = `${((qi+1)/tot)*100}%`;
+  $("q-err").classList.add("hidden");
+  // Show identifier box only for identifier questions
+  const idBox = $("q-id-box");
+  if (q.isIdentifier && q.identifier) {
+    $("q-id-label").textContent = "Debugging ID";
+    $("q-id-value").textContent = q.identifier;
+    idBox.classList.remove("hidden");
+  } else {
+    idBox.classList.add("hidden");
+  }
+
+  const qtEl=$("q-text"), ansEl=$("q-ans");
+  qtEl.innerHTML=""; ansEl.innerHTML="";
+
+  if (q.format==="fill_blank") {
+    q.question.split("___").forEach((p,i,a)=>{
+      qtEl.appendChild(document.createTextNode(p));
+      if (i<a.length-1) {
+        const inp=document.createElement("input");
+        inp.type="text"; inp.className="fill-blank-input"; inp.id="fb-inp"; inp.placeholder="…";
+        if (saved) inp.value=saved;
+        qtEl.appendChild(inp);
+      }
+    });
+  } else {
+    qtEl.textContent = q.question;
+    if (q.format==="mcq") {
+      const wrap=document.createElement("div"); wrap.className="space-y-2";
+      const hint=document.createElement("p"); hint.className="text-xs text-slate-500 uppercase tracking-widest mb-3"; hint.textContent="Select one";
+      ansEl.appendChild(hint);
+      (q.options||[]).forEach(opt=>{
+        const lbl=document.createElement("label");
+        lbl.className="flex items-start gap-3 bg-slate-700/30 border border-slate-700 hover:border-slate-500 rounded-xl p-4 cursor-pointer transition-all";
+        lbl.innerHTML=`<input type="radio" name="mcq" value="${opt.replace(/"/g,'&quot;')}" class="mt-0.5 accent-blue-500 shrink-0" ${saved===opt?"checked":""}><span class="text-slate-200 leading-snug">${opt}</span>`;
+        wrap.appendChild(lbl);
+      });
+      ansEl.appendChild(wrap);
+    } else {
+      const hint=document.createElement("p"); hint.className="text-xs text-slate-500 uppercase tracking-widest mb-2"; hint.textContent="Your Answer";
+      const ta=document.createElement("textarea");
+      ta.id="txt-ans"; ta.rows=3; ta.placeholder="Type your answer…";
+      ta.className="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 transition resize-none";
+      if (saved) ta.value=saved;
+      ansEl.appendChild(hint); ansEl.appendChild(ta);
+    }
+  }
+
+  $("btn-prev").classList.toggle("hidden", qi===0);
+  const last=qi===questions.length-1;
+  $("btn-next").classList.toggle("hidden", last);
+  $("btn-sub").classList.toggle("hidden", !last);
+}
+
+function readAns() {
+  const q=questions[qi];
+  if (q.format==="mcq") { const r=document.querySelector('input[name="mcq"]:checked'); return r?r.value:null; }
+  if (q.format==="fill_blank") { const i=$("fb-inp"); return i?i.value.trim()||null:null; }
+  const ta=$("txt-ans"); return ta?ta.value.trim()||null:null;
+}
+
+function save() {
+  localStorage.setItem("q_qi", qi);
+  localStorage.setItem("q_a",  JSON.stringify(answers));
+}
+
+window.nextQ = ()=>{ const a=readAns(); if(!a){err("q-err","Answer before continuing."); return;} answers[qi]=a; qi++; save(); renderQ(); };
+window.prevQ = ()=>{ const a=readAns(); if(a) answers[qi]=a; qi--; save(); renderQ(); };
+window.submitQuiz = async ()=>{ const a=readAns(); if(!a){err("q-err","Answer before submitting."); return;} answers[qi]=a; await finalize(); };
+async function autoSub() { questions.forEach((_,i)=>{ if(!answers[i]) answers[i]=""; }); await finalize(); }
+
+// ── score & submit ──────────────────────────────────
+function grade(q,ua) {
+  // MCQ → auto-grade; text/fill_blank → "pending" (admin reviews)
+  if (q.format==="mcq") {
+    if (!ua) return false;
+    const u=ua.toLowerCase().trim();
+    return (q.correct_answers||[]).some(ca=>u===ca.toLowerCase().trim());
+  }
+  return "pending";
+}
+
+async function finalize() {
+  clearInterval(tick);
+  screen("s-loading"); $("load-msg").textContent="Submitting…";
+
+  const data = questions.map((q,i)=>({
+    question:       q.question,
+    format:         q.format,
+    isIdentifier:   q.isIdentifier||false,
+    identifier:     q.identifier||"",
+    userAnswer:     answers[i]||"",
+    correctAnswers: q.correct_answers||[],
+    isCorrect:      grade(q, answers[i]||"")
+  }));
+  const score   = data.filter(d=>d.isCorrect===true).length;
+  const pending = data.filter(d=>d.isCorrect==="pending").length;
+  const total = questions.length;
+  // Collect all identifier values assigned to this agent
+  const identifierValues = data.filter(d=>d.isIdentifier).map(d=>d.identifier).filter(Boolean);
+  const identifierValue  = identifierValues.join(", ");
+
+  try {
+    await push(ref(db,"submissions"), {
+      agentName, asmId, asmName, score, pending, total,
+      ts: Date.now(), identifierValue, answers: data
+    });
+    // Only clear localStorage after confirmed save
+    ["agentName","q_qs","q_aid","q_an","q_settings","q_idq","q_qi","q_t","q_a"].forEach(k=>localStorage.removeItem(k));
+    showResults(score, total, data);
+  } catch(e) {
+    console.error("Submission save failed:", e);
+    // Show error on quiz screen so they know to retry
+    screen("s-quiz");
+    const errEl = $("q-err");
+    errEl.textContent = `⚠ Failed to submit: ${e.message}. Make sure Firebase RTDB rules allow writes (.write: true), then try submitting again.`;
+    errEl.classList.remove("hidden");
+    // Re-enable timer so they know it's still running
+    startTimer();
+  }
+}
+
+let _resultsData = [];
+
+function showResults(score,total,data) {
+  _resultsData = data;
+  screen("s-results");
+  const wrong   = data.filter(d=>d.isCorrect===false).length;
+  const pending = data.filter(d=>d.isCorrect==="pending").length;
+  const autoTotal = total - pending;
+  const pct     = autoTotal>0 ? Math.round(score/autoTotal*100) : 0;
+  $("r-emoji").textContent         = pct>=70?"🏆":pct>=40?"📊":"📚";
+  $("r-agent").textContent         = agentName;
+  $("r-asm").textContent           = asmName;
+  $("r-score").textContent         = pending>0 ? `${score} / ${autoTotal}` : `${score} / ${total}`;
+  $("r-pct").textContent           = pending>0 ? `${pct}% auto-scored · ${pending} pending review` : `${pct}% accuracy`;
+  $("r-correct-count").textContent = `✅ ${score} correct`;
+  $("r-wrong-count").textContent   = wrong>0 ? `❌ ${wrong} wrong` : (pending>0 ? `⏳ ${pending} pending` : `❌ 0 wrong`);
+
+  filterResults("all");
+}
+
+window.filterResults = (mode) => {
+  ["all","wrong","right","pending"].forEach(t => {
+    const btn = $(`rf-${t}`);
+    if (!btn) return;
+    btn.className = t===mode
+      ? "px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-600 text-white transition-colors"
+      : "px-3 py-1.5 text-xs font-medium rounded-lg bg-slate-700 text-slate-400 hover:bg-slate-600 transition-colors";
+  });
+
+  const subset = mode==="wrong"   ? _resultsData.filter(d=>d.isCorrect===false)
+               : mode==="right"   ? _resultsData.filter(d=>d.isCorrect===true)
+               : mode==="pending" ? _resultsData.filter(d=>d.isCorrect==="pending")
+               : _resultsData;
+
+  const rev=$("r-review"); rev.innerHTML="";
+
+  if (!subset.length) {
+    rev.innerHTML=`<p class="text-slate-500 text-sm text-center py-8">${mode==="wrong"?"No wrong answers 🎉":"No correct answers"}</p>`;
+    return;
+  }
+
+  subset.forEach((a,_i)=>{
+    const i = _resultsData.indexOf(a);
+    const c = document.createElement("div");
+
+    if (a.isCorrect===true) {
+      c.className="bg-slate-800 border border-green-800/40 rounded-xl p-4";
+      c.innerHTML=`
+        <div class="flex items-start justify-between gap-2 mb-2">
+          <p class="text-sm text-slate-300 font-medium">Q${i+1}. ${a.question.replace(/___/g,"____")}</p>
+          <span class="shrink-0 text-lg">✅</span>
+        </div>
+        <div class="flex items-center gap-2 mt-1">
+          <span class="text-xs text-slate-500">Your answer:</span>
+          <span class="text-xs bg-green-900/40 text-green-400 border border-green-700/40 px-2 py-0.5 rounded-full">${a.userAnswer||"(blank)"}</span>
+        </div>`;
+    } else if (a.isCorrect==="pending") {
+      c.className="bg-slate-800 border border-yellow-700/40 rounded-xl p-4";
+      c.innerHTML=`
+        <div class="flex items-start justify-between gap-2 mb-2">
+          <p class="text-sm text-slate-300 font-medium">Q${i+1}. ${a.question.replace(/___/g,"____")}</p>
+          <span class="shrink-0 text-xs bg-yellow-500/20 text-yellow-400 border border-yellow-600/40 px-2 py-1 rounded-full">⏳ Pending Review</span>
+        </div>
+        <div class="flex items-center gap-2 mt-1">
+          <span class="text-xs text-slate-500">Your answer:</span>
+          <span class="text-xs bg-yellow-900/30 text-yellow-300 border border-yellow-700/40 px-2 py-0.5 rounded-full">${a.userAnswer||"(blank)"}</span>
+        </div>`;
+    } else {
+      c.className="bg-slate-800 border border-red-700/50 rounded-xl p-4";
+      c.innerHTML=`
+        <div class="flex items-start justify-between gap-2 mb-3">
+          <p class="text-sm text-white font-medium">Q${i+1}. ${a.question.replace(/___/g,"____")}</p>
+          <span class="shrink-0 text-lg">❌</span>
+        </div>
+        <div class="space-y-1.5">
+          <div class="flex items-start gap-2">
+            <span class="text-xs text-slate-500 shrink-0 pt-0.5">You answered:</span>
+            <span class="text-xs bg-red-900/40 text-red-400 border border-red-700/40 px-2 py-0.5 rounded-full line-through">${a.userAnswer||"(no answer)"}</span>
+          </div>
+          <div class="flex items-start gap-2">
+            <span class="text-xs text-slate-500 shrink-0 pt-0.5">Correct answer:</span>
+            <span class="text-xs bg-green-900/50 text-green-300 border border-green-600/50 px-2 py-0.5 rounded-full font-semibold">${a.correctAnswers.join(" / ")}</span>
+          </div>
+        </div>`;
+    }
+    rev.appendChild(c);
+  });
+}
+</script>
+</body>
+</html>

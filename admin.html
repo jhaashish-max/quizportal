@@ -1,0 +1,1170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Admin — QuizPortal</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    ::-webkit-scrollbar{width:6px;height:6px}
+    ::-webkit-scrollbar-track{background:#1e293b}
+    ::-webkit-scrollbar-thumb{background:#475569;border-radius:3px}
+    .tab-on { border-color:#3b82f6;color:#fff;background:rgba(59,130,246,.1); }
+    .tab-off{ border-color:transparent;color:#94a3b8; }
+    .tab-off:hover{color:#e2e8f0;}
+    #toast{
+      position:fixed;top:1.25rem;left:50%;transform:translateX(-50%) translateY(-140%);
+      z-index:9999;padding:.65rem 1.5rem;border-radius:.75rem;font-size:.875rem;
+      font-weight:500;white-space:nowrap;box-shadow:0 8px 32px rgba(0,0,0,.5);
+      transition:transform .35s cubic-bezier(.34,1.56,.64,1),opacity .2s;opacity:0;pointer-events:none;
+    }
+    #toast.show{transform:translateX(-50%) translateY(0);opacity:1;pointer-events:auto;}
+    #toast.ok {background:#14532d;border:1px solid #22c55e;color:#bbf7d0;}
+    #toast.bad{background:#7f1d1d;border:1px solid #ef4444;color:#fecaca;}
+    #toast.inf{background:#1e3a5f;border:1px solid #3b82f6;color:#bfdbfe;}
+  </style>
+</head>
+<body class="bg-slate-900 text-slate-200 min-h-screen">
+<div id="toast"></div>
+
+<!-- LOGIN -->
+<div id="s-login" class="hidden min-h-screen flex items-center justify-center p-4">
+  <div class="w-full max-w-sm bg-slate-800 border border-slate-700 rounded-2xl shadow-2xl p-8">
+    <div class="text-center mb-8">
+      <div class="text-4xl mb-3">🛡️</div>
+      <h1 class="text-xl font-bold text-white">Admin Panel</h1>
+      <p class="text-slate-500 text-sm mt-1">QuizPortal</p>
+    </div>
+    <div class="space-y-4">
+      <div>
+        <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1">Password</label>
+        <input id="inp-pw" type="password" placeholder="Enter admin password"
+          class="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 transition"
+          onkeydown="if(event.key==='Enter') login()"/>
+      </div>
+      <button onclick="login()"
+        class="w-full bg-blue-600 hover:bg-blue-500 text-white font-semibold py-3 rounded-lg transition-colors">
+        Sign In →
+      </button>
+    </div>
+    <p id="login-err" class="hidden text-red-400 text-sm mt-3 text-center"></p>
+  </div>
+</div>
+
+<!-- PANEL -->
+<div id="s-panel" class="hidden min-h-screen">
+
+  <!-- header -->
+  <header class="sticky top-0 z-20 bg-slate-800/95 backdrop-blur border-b border-slate-700 px-4 py-3">
+    <div class="max-w-6xl mx-auto flex items-center gap-3">
+      <div class="bg-blue-600 rounded-lg p-1.5 text-sm shrink-0">📋</div>
+      <div class="mr-auto">
+        <p class="text-sm font-bold text-white leading-tight">QuizPortal</p>
+        <p class="text-slate-500 text-xs">Admin Panel</p>
+      </div>
+      <!-- assessment selector -->
+      <select id="asm-sel" onchange="onAsmChange()"
+        class="max-w-[200px] bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500 transition truncate">
+        <option value="">All Assessments</option>
+      </select>
+      <button onclick="refreshAll()" class="px-3 py-2 bg-slate-700 hover:bg-slate-600 text-sm rounded-lg transition-colors" title="Refresh">↻</button>
+      <button onclick="logout()"     class="px-3 py-2 bg-slate-700 hover:bg-slate-600 text-sm rounded-lg transition-colors text-slate-400">Out</button>
+    </div>
+  </header>
+
+  <main class="max-w-6xl mx-auto p-5 space-y-5">
+
+    <!-- stats -->
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-4" id="stats"></div>
+
+    <!-- tabs -->
+    <div class="flex border-b border-slate-700 gap-1">
+      <button id="t-leader"    onclick="tab('leader')"    class="tab-on  border-b-2 px-5 py-3 text-sm font-medium transition-all">📊 Leaderboard</button>
+      <button id="t-qbank"     onclick="tab('qbank')"     class="tab-off border-b-2 px-5 py-3 text-sm font-medium transition-all">📝 Questions</button>
+      <button id="t-assessments" onclick="tab('assessments')" class="tab-off border-b-2 px-5 py-3 text-sm font-medium transition-all">🗂 Assessments</button>
+    </div>
+
+    <!-- LEADERBOARD -->
+    <div id="p-leader">
+      <div class="bg-slate-800 border border-slate-700 rounded-2xl overflow-hidden">
+        <div class="px-6 py-4 border-b border-slate-700 flex items-center justify-between">
+          <h2 class="font-semibold">Submissions</h2>
+          <div class="flex items-center gap-2">
+            <span id="sub-cnt" class="text-xs bg-slate-700 text-slate-400 px-2 py-1 rounded-full">—</span>
+            <button onclick="exportCSV()"
+              class="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-700 hover:bg-emerald-600 text-white text-xs font-medium rounded-lg transition-colors">
+              ⬇ Export CSV
+            </button>
+          </div>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="text-left text-slate-500 text-xs uppercase border-b border-slate-700">
+                <th class="px-5 py-3">#</th>
+                <th class="px-5 py-3">Agent</th>
+                <th class="px-5 py-3">Assessment</th>
+                <th class="px-5 py-3">Assigned ID</th>
+                <th class="px-5 py-3">Score</th>
+                <th class="px-5 py-3">%</th>
+                <th class="px-5 py-3">When</th>
+                <th class="px-5 py-3 w-20"></th>
+              </tr>
+            </thead>
+            <tbody id="sub-body">
+              <tr><td colspan="7" class="px-6 py-10 text-center text-slate-500">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- QUESTION BANK -->
+    <div id="p-qbank" class="hidden">
+      <div id="q-pick-msg" class="hidden text-center py-16 text-slate-500">
+        <p class="text-3xl mb-2">⬆️</p>
+        <p class="font-medium text-slate-400">Pick an assessment from the header dropdown</p>
+      </div>
+      <div id="q-inner" class="hidden grid grid-cols-1 lg:grid-cols-5 gap-5">
+        <!-- add form -->
+        <div class="lg:col-span-2">
+          <div class="bg-slate-800 border border-slate-700 rounded-2xl overflow-hidden sticky top-20">
+            <div class="px-5 py-4 border-b border-slate-700">
+              <p class="font-semibold text-sm">➕ Add Question</p>
+              <p id="q-ctx" class="text-xs text-blue-400 mt-0.5"></p>
+            </div>
+            <form id="q-form" class="p-5 space-y-4" onsubmit="addQuestion(event)">
+              <div>
+                <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1">Format</label>
+                <select id="q-fmt" onchange="onFmtChange()"
+                  class="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none focus:border-blue-500 transition">
+                  <option value="mcq">MCQ — Multiple Choice</option>
+                  <option value="fill_blank">Fill in the Blank</option>
+                  <option value="text">Text — Open-ended</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1">
+                  Question <span id="blank-hint" class="hidden text-slate-500 normal-case">(use ___ for blank)</span>
+                </label>
+                <textarea id="q-txt" rows="3" placeholder="Enter question…"
+                  class="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2.5 text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 transition resize-none text-sm"></textarea>
+              </div>
+              <div id="opts-wrap">
+                <label class="block text-xs text-slate-400 uppercase tracking-wide mb-2">Options</label>
+                <div id="opts" class="space-y-2">
+                  <div class="flex gap-2"><input type="text" placeholder="Option A" class="opt flex-1 bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 transition text-sm"><button type="button" onclick="rmOpt(this)" class="text-slate-600 hover:text-red-400 px-1 text-xl">×</button></div>
+                  <div class="flex gap-2"><input type="text" placeholder="Option B" class="opt flex-1 bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 transition text-sm"><button type="button" onclick="rmOpt(this)" class="text-slate-600 hover:text-red-400 px-1 text-xl">×</button></div>
+                </div>
+                <button type="button" onclick="addOpt()" class="mt-2 text-xs text-blue-400 hover:text-blue-300">+ Option</button>
+              </div>
+              <div>
+                <label id="q-correct-label" class="block text-xs text-slate-400 uppercase tracking-wide mb-1">Correct Answers <span class="text-slate-600 normal-case">(comma-separated)</span></label>
+                <input type="text" id="q-correct" placeholder="answer1, keyword2"
+                  class="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2.5 text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 transition text-sm">
+                <p id="q-correct-hint" class="text-xs text-slate-600 mt-1 hidden">Optional for text/fill-blank — admin will review manually</p>
+              </div>
+              <!-- Identifier question toggle -->
+              <div class="border-t border-slate-700 pt-3 space-y-3">
+                <label class="flex items-center gap-3 cursor-pointer select-none">
+                  <div class="relative">
+                    <input id="q-is-id" type="checkbox" class="sr-only peer" onchange="onIdToggle()">
+                    <div class="w-10 h-5 bg-slate-600 peer-checked:bg-indigo-600 rounded-full transition-colors"></div>
+                    <div class="absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full transition-transform peer-checked:translate-x-5"></div>
+                  </div>
+                  <div>
+                    <p class="text-sm text-slate-300">Identifier Question</p>
+                    <p class="text-xs text-slate-500">Agents get one question per group, rotating within the group</p>
+                  </div>
+                </label>
+                <div id="q-id-wrap" class="hidden space-y-3">
+                  <div>
+                    <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1">Group Name <span class="text-slate-600 normal-case">(e.g. Intent URL, Revocable Mandate)</span></label>
+                    <input id="q-id-group" type="text" placeholder="e.g. Intent URL"
+                      class="w-full bg-slate-700 border border-indigo-600/50 rounded-lg px-3 py-2.5 text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition text-sm">
+                    <p class="text-xs text-slate-600 mt-1">Questions in the same group rotate round-robin. Each agent gets 1 per group.</p>
+                  </div>
+                  <div>
+                    <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1">Identifier Values <span class="text-slate-600 normal-case">(comma-separated → creates one question per ID)</span></label>
+                    <input id="q-id-val" type="text" placeholder="PAY_001, PAY_002, PAY_003"
+                      class="w-full bg-slate-700 border border-indigo-600/50 rounded-lg px-3 py-2.5 text-white font-mono placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition text-sm">
+                    <p id="q-id-preview" class="text-xs text-indigo-400 mt-1 hidden"></p>
+                  </div>
+                </div>
+              </div>
+              <button type="submit" class="w-full bg-green-600 hover:bg-green-500 text-white font-semibold py-2.5 rounded-lg transition-colors text-sm">
+                Add Question
+              </button>
+            </form>
+          </div>
+        </div>
+        <!-- list -->
+        <div class="lg:col-span-3">
+          <div class="bg-slate-800 border border-slate-700 rounded-2xl overflow-hidden">
+            <div class="px-5 py-4 border-b border-slate-700 flex items-center justify-between">
+              <h2 class="font-semibold text-sm">Questions</h2>
+              <span id="q-cnt" class="text-xs bg-slate-700 text-slate-400 px-2 py-1 rounded-full">—</span>
+            </div>
+            <div id="q-list" class="p-4 space-y-3 max-h-[70vh] overflow-y-auto">
+              <p class="text-slate-500 text-sm text-center py-10">Select an assessment to see questions.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ASSESSMENTS -->
+    <div id="p-assessments" class="hidden">
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        <!-- create -->
+        <div class="bg-slate-800 border border-slate-700 rounded-2xl overflow-hidden">
+          <div class="px-5 py-4 border-b border-slate-700"><h2 class="font-semibold text-sm">➕ Create Assessment</h2></div>
+          <div class="p-5 space-y-4">
+            <!-- Name -->
+            <div>
+              <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1">Assessment Name</label>
+              <input id="new-asm" type="text" placeholder="e.g. Q1 2025 Support Quiz"
+                class="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2.5 text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 transition text-sm">
+            </div>
+            <!-- Timer + Question count row -->
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1">Timer (minutes)</label>
+                <input id="new-timer" type="number" min="1" max="120" value="25"
+                  class="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2.5 text-white focus:outline-none focus:border-blue-500 transition text-sm">
+              </div>
+              <div>
+                <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1">Questions to Show</label>
+                <input id="new-qcount" type="number" min="1" max="50" value="7"
+                  class="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2.5 text-white focus:outline-none focus:border-blue-500 transition text-sm">
+              </div>
+              <div>
+                <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1">Identifier Qs per Agent</label>
+                <input id="new-idqcount" type="number" min="1" max="20" value="1"
+                  class="w-full bg-slate-700 border border-indigo-600/40 rounded-lg px-3 py-2.5 text-white focus:outline-none focus:border-indigo-500 transition text-sm">
+              </div>
+            </div>
+            <p class="text-xs text-slate-500 -mt-1">e.g. 5 identifier Qs + count=2 → Agent 1 gets Q1,Q2 · Agent 2 gets Q3,Q4 · Agent 3 gets Q5,Q1…</p>
+            <!-- Randomize toggle -->
+            <label class="flex items-center gap-3 cursor-pointer select-none">
+              <div class="relative">
+                <input id="new-random" type="checkbox" checked class="sr-only peer">
+                <div class="w-10 h-5 bg-slate-600 peer-checked:bg-blue-600 rounded-full transition-colors"></div>
+                <div class="absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full transition-transform peer-checked:translate-x-5"></div>
+              </div>
+              <span class="text-sm text-slate-300">Randomise question order</span>
+            </label>
+            <button id="create-btn" onclick="createAssessment()"
+              class="w-full px-4 py-2.5 bg-green-600 hover:bg-green-500 text-white font-semibold rounded-lg transition-colors text-sm">
+              Create Assessment
+            </button>
+          </div>
+        </div>
+        <!-- list -->
+        <div class="bg-slate-800 border border-slate-700 rounded-2xl overflow-hidden">
+          <div class="px-5 py-4 border-b border-slate-700 flex items-center justify-between">
+            <h2 class="font-semibold text-sm">All Assessments</h2>
+            <span id="asm-cnt" class="text-xs bg-slate-700 text-slate-400 px-2 py-1 rounded-full">—</span>
+          </div>
+          <div id="asm-list" class="p-4 space-y-2 max-h-96 overflow-y-auto">
+            <p class="text-slate-500 text-sm text-center py-8">Loading…</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- EDIT ASSESSMENT MODAL -->
+<div id="edit-modal" class="hidden fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4" onclick="if(event.target===this)closeEditModal()">
+  <div class="bg-slate-800 border border-slate-700 rounded-2xl w-full max-w-sm p-6">
+    <div class="flex items-center justify-between mb-5">
+      <h3 class="font-semibold text-white">Edit Assessment</h3>
+      <button onclick="closeEditModal()" class="text-slate-400 hover:text-white text-2xl leading-none">×</button>
+    </div>
+    <input type="hidden" id="edit-id">
+    <div class="space-y-4">
+      <div>
+        <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1">Name</label>
+        <input id="edit-name" type="text" class="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2.5 text-white focus:outline-none focus:border-blue-500 transition text-sm">
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1">Timer (min)</label>
+          <input id="edit-timer" type="number" min="1" max="120" class="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2.5 text-white focus:outline-none focus:border-blue-500 transition text-sm">
+        </div>
+        <div>
+          <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1">Questions</label>
+          <input id="edit-qcount" type="number" min="1" max="50" class="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2.5 text-white focus:outline-none focus:border-blue-500 transition text-sm">
+        </div>
+        <div>
+          <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1">Identifier Qs / Agent</label>
+          <input id="edit-idqcount" type="number" min="1" max="20" class="w-full bg-slate-700 border border-indigo-600/40 rounded-lg px-3 py-2.5 text-white focus:outline-none focus:border-indigo-500 transition text-sm">
+        </div>
+      </div>
+      <label class="flex items-center gap-3 cursor-pointer select-none">
+        <div class="relative">
+          <input id="edit-random" type="checkbox" class="sr-only peer">
+          <div class="w-10 h-5 bg-slate-600 peer-checked:bg-blue-600 rounded-full transition-colors"></div>
+          <div class="absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full transition-transform peer-checked:translate-x-5"></div>
+        </div>
+        <span class="text-sm text-slate-300">Randomise question order</span>
+      </label>
+      <div class="flex gap-2 pt-1">
+        <button onclick="closeEditModal()" class="flex-1 py-2.5 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm transition-colors">Cancel</button>
+        <button onclick="saveEditAssessment()" class="flex-1 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-medium rounded-lg text-sm transition-colors">Save Changes</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- EDIT QUESTION MODAL -->
+<div id="eq-modal" class="hidden fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4" onclick="if(event.target===this)closeEQModal()">
+  <div class="bg-slate-800 border border-slate-700 rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto p-6">
+    <div class="flex items-center justify-between mb-5">
+      <h3 class="font-semibold text-white">Edit Question</h3>
+      <button onclick="closeEQModal()" class="text-slate-400 hover:text-white text-2xl leading-none">×</button>
+    </div>
+    <input type="hidden" id="eq-id">
+    <div class="space-y-4">
+      <!-- Format -->
+      <div>
+        <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1">Format</label>
+        <select id="eq-fmt" onchange="onEQFmtChange()"
+          class="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2.5 text-white focus:outline-none focus:border-blue-500 transition text-sm">
+          <option value="mcq">MCQ — Multiple Choice</option>
+          <option value="fill_blank">Fill in the Blank</option>
+          <option value="text">Text (open answer)</option>
+        </select>
+      </div>
+      <!-- Question text -->
+      <div>
+        <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1">
+          Question
+          <span id="eq-blank-hint" class="hidden text-slate-600 normal-case ml-1">(use ___ for blank)</span>
+        </label>
+        <textarea id="eq-txt" rows="3"
+          class="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2.5 text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 transition text-sm resize-none"></textarea>
+      </div>
+      <!-- MCQ options -->
+      <div id="eq-opts-wrap">
+        <label class="block text-xs text-slate-400 uppercase tracking-wide mb-2">Options</label>
+        <div id="eq-opts" class="space-y-2"></div>
+        <button type="button" onclick="addEQOpt()" class="text-xs text-blue-400 hover:text-blue-300 mt-2 transition-colors">+ Add Option</button>
+      </div>
+      <!-- Correct answers -->
+      <div>
+        <label id="eq-correct-label" class="block text-xs text-slate-400 uppercase tracking-wide mb-1">
+          Correct Answers <span class="text-slate-600 normal-case">(comma-separated)</span>
+        </label>
+        <input id="eq-correct" type="text" placeholder="answer1, keyword2"
+          class="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2.5 text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 transition text-sm">
+        <p id="eq-correct-hint" class="text-xs text-slate-600 mt-1 hidden">Optional for text/fill-blank — admin will review manually</p>
+      </div>
+      <!-- Identifier toggle -->
+      <div class="border-t border-slate-700 pt-3 space-y-3">
+        <label class="flex items-center gap-3 cursor-pointer select-none">
+          <div class="relative">
+            <input id="eq-is-id" type="checkbox" class="sr-only peer" onchange="onEQIdToggle()">
+            <div class="w-10 h-5 bg-slate-600 peer-checked:bg-indigo-600 rounded-full transition-colors"></div>
+            <div class="absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full transition-transform peer-checked:translate-x-5"></div>
+          </div>
+          <p class="text-sm text-slate-300">Identifier Question</p>
+        </label>
+        <div id="eq-id-wrap" class="hidden space-y-3">
+          <div>
+            <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1">Group Name</label>
+            <input id="eq-id-group" type="text" placeholder="e.g. Intent URL"
+              class="w-full bg-slate-700 border border-indigo-600/50 rounded-lg px-3 py-2.5 text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition text-sm">
+          </div>
+          <div>
+            <label class="block text-xs text-slate-400 uppercase tracking-wide mb-1">Identifier Values <span class="text-slate-600 normal-case">(comma-separated → creates one question per ID)</span></label>
+            <input id="eq-id-val" type="text" placeholder="PAY_001, PAY_002, PAY_003"
+              class="w-full bg-slate-700 border border-indigo-600/50 rounded-lg px-3 py-2.5 text-white font-mono placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition text-sm">
+            <p id="eq-id-preview" class="text-xs text-indigo-400 mt-1 hidden"></p>
+          </div>
+        </div>
+      </div>
+      <!-- Actions -->
+      <div class="flex gap-3 pt-1">
+        <button onclick="closeEQModal()" class="flex-1 py-2.5 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-sm transition-colors">Cancel</button>
+        <button onclick="saveEditQuestion()" class="flex-1 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-lg text-sm transition-colors">Save Changes</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- DETAIL MODAL -->
+<div id="modal" class="hidden fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4" onclick="if(event.target===this)closeModal()">
+  <div class="bg-slate-800 border border-slate-700 rounded-2xl w-full max-w-2xl flex flex-col" style="max-height:90vh">
+    <div class="flex items-center justify-between px-6 py-4 border-b border-slate-700 shrink-0">
+      <h3 class="font-semibold text-white">Answer Details</h3>
+      <button onclick="closeModal()" class="text-slate-400 hover:text-white text-2xl leading-none">×</button>
+    </div>
+    <div id="modal-body" class="overflow-y-auto px-6 py-4 flex-1"></div>
+  </div>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+import {
+  getDatabase, ref, push, set, get, remove
+} from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+
+// ── config ─────────────────────────────────────────
+const cfg = {
+  apiKey:            "AIzaSyDU1iRMbM6PoPaZDwNqPzAlvvswMtcRAxU",
+  authDomain:        "freshdesk-p1-timer.firebaseapp.com",
+  databaseURL:       "https://freshdesk-p1-timer-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId:         "freshdesk-p1-timer",
+  storageBucket:     "freshdesk-p1-timer.firebasestorage.app",
+  messagingSenderId: "964831674348",
+  appId:             "1:964831674348:web:adeb29c8c72a7cd0874ac9"
+};
+
+// ── CHANGE PASSWORD HERE ───────────────────────────
+const PASS = "Admin@123";
+
+const app = initializeApp(cfg);
+const db  = getDatabase(app);
+const $   = id => document.getElementById(id);
+
+let curAsmId = "", curAsmName = "";
+
+// ── helpers ────────────────────────────────────────
+function snap2arr(snap) {
+  if (!snap.exists()) return [];
+  return Object.entries(snap.val()).map(([id,v])=>({id,...v}));
+}
+function esc(s) {
+  return String(s??"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+let _tt;
+function toast(msg, type="inf") {
+  const el=$("toast");
+  el.textContent=msg; el.className=`show ${type}`;
+  clearTimeout(_tt);
+  _tt=setTimeout(()=>el.classList.remove("show"), type==="bad"?8000:type==="ok"?3500:2000);
+  console.log(`[${type}]`,msg);
+}
+
+// ── auth ───────────────────────────────────────────
+window.login = () => {
+  if ($("inp-pw").value === PASS) {
+    sessionStorage.setItem("ok","1");
+    showPanel();
+  } else {
+    const e=$("login-err"); e.textContent="Wrong password."; e.classList.remove("hidden");
+    $("inp-pw").value=""; $("inp-pw").focus();
+  }
+};
+window.logout = () => { sessionStorage.removeItem("ok"); location.reload(); };
+
+// ── panel ──────────────────────────────────────────
+async function showPanel() {
+  $("s-login").classList.add("hidden");
+  $("s-panel").classList.remove("hidden");
+  await Promise.all([loadAssessments(), loadSubmissions()]);
+}
+
+// ── tabs ───────────────────────────────────────────
+window.tab = (id) => {
+  ["leader","qbank","assessments"].forEach(t => {
+    $(`t-${t}`).className  = t===id ? "tab-on  border-b-2 px-5 py-3 text-sm font-medium transition-all"
+                                     : "tab-off border-b-2 px-5 py-3 text-sm font-medium transition-all";
+    $(`p-${t}`).classList.toggle("hidden", t!==id);
+  });
+  if (id==="qbank") updateQVisibility();
+};
+
+// ── assessment selector ────────────────────────────
+window.onAsmChange = () => {
+  const sel=$("asm-sel");
+  curAsmId   = sel.value;
+  curAsmName = sel.options[sel.selectedIndex]?.text || "";
+  loadSubmissions();
+  if (!$("p-qbank").classList.contains("hidden")) updateQVisibility();
+};
+
+function updateQVisibility() {
+  if (curAsmId) {
+    $("q-pick-msg").classList.add("hidden");
+    $("q-inner").classList.remove("hidden"); $("q-inner").classList.add("grid");
+    $("q-ctx").textContent = curAsmName;
+    loadQuestions();
+  } else {
+    $("q-pick-msg").classList.remove("hidden");
+    $("q-inner").classList.add("hidden"); $("q-inner").classList.remove("grid");
+  }
+}
+
+// ── load assessments ───────────────────────────────
+async function loadAssessments() {
+  try {
+    const snap = await get(ref(db,"assessments"));
+    const list = snap2arr(snap).sort((a,b)=>(a.name||"").localeCompare(b.name||""));
+
+    // repopulate header selector
+    const sel=$("asm-sel"), prev=sel.value;
+    sel.innerHTML=`<option value="">All Assessments</option>`;
+    list.forEach(a=>{ const o=document.createElement("option"); o.value=a.id; o.textContent=a.name; sel.appendChild(o); });
+    if (prev) sel.value=prev;
+
+    // render list in Assessments tab
+    $("asm-cnt").textContent=`${list.length}`;
+    const el=$("asm-list");
+    if (!list.length) { el.innerHTML=`<p class="text-slate-500 text-sm text-center py-8">No assessments yet.</p>`; return; }
+    el.innerHTML="";
+    list.forEach(a=>{
+      const row=document.createElement("div");
+      row.className="bg-slate-700/30 border border-slate-700 rounded-xl px-4 py-3 space-y-2";
+      row.innerHTML=`
+        <div class="flex items-start justify-between gap-2">
+          <span class="text-sm font-medium text-white leading-snug">${esc(a.name)}</span>
+          <div class="flex gap-1.5 shrink-0">
+            <button onclick="openEditModal('${a.id}')"
+              class="text-xs text-blue-400 hover:text-blue-300 px-2 py-1 bg-blue-500/10 hover:bg-blue-500/20 rounded-lg transition-colors">Edit</button>
+            <button onclick="deleteAssessment('${a.id}','${esc(a.name)}')"
+              class="text-xs text-red-400 hover:text-red-300 px-2 py-1 bg-red-500/10 hover:bg-red-500/20 rounded-lg transition-colors">Delete</button>
+          </div>
+        </div>
+        <div class="flex flex-wrap gap-2 text-xs">
+          <span class="bg-slate-700 text-slate-300 px-2 py-0.5 rounded-full">⏱ ${a.timer||25} min</span>
+          <span class="bg-slate-700 text-slate-300 px-2 py-0.5 rounded-full">📋 ${a.qCount||7} questions</span>
+          <span class="bg-slate-700 text-slate-300 px-2 py-0.5 rounded-full">${a.randomize!==false?"🔀 Randomised":"📌 In order"}</span>
+          <span class="bg-indigo-900/50 text-indigo-300 border border-indigo-700/40 px-2 py-0.5 rounded-full">🔍 Identifier groups</span>
+        </div>`;
+      el.appendChild(row);
+    });
+  } catch(e) {
+    console.error("loadAssessments:", e);
+    toast("Failed to load assessments: "+e.message, "bad");
+  }
+}
+
+// ── create assessment ──────────────────────────────
+window.createAssessment = async () => {
+  const name        = $("new-asm").value.trim();
+  const timer       = parseInt($("new-timer").value)     || 25;
+  const qCount      = parseInt($("new-qcount").value)    || 7;
+  const idQCount    = parseInt($("new-idqcount").value)  || 1;
+  const randomize   = $("new-random").checked;
+  if (!name) { toast("Enter a name first.", "bad"); $("new-asm").focus(); return; }
+
+  const btn=$("create-btn");
+  btn.disabled=true; btn.textContent="Creating…";
+  toast("Creating…","inf");
+
+  try {
+    const newRef = await push(ref(db,"assessments"), { name, timer, qCount, idQCount, randomize, createdAt: Date.now() });
+    console.log("Created assessment:", newRef.key, name);
+    $("new-asm").value=""; $("new-timer").value=25; $("new-qcount").value=7; $("new-idqcount").value=1; $("new-random").checked=true;
+    toast(`✓ "${name}" created!`, "ok");
+    await loadAssessments();
+    $("asm-sel").value = newRef.key;
+    curAsmId   = newRef.key;
+    curAsmName = name;
+    tab("assessments");
+  } catch(e) {
+    console.error("createAssessment:", e);
+    toast("Error: "+e.message, "bad");
+  } finally {
+    btn.disabled=false; btn.textContent="Create Assessment";
+  }
+};
+
+// ── edit assessment modal ──────────────────────────
+window.openEditModal = async (id) => {
+  const snap = await get(ref(db,`assessments/${id}`));
+  if (!snap.exists()) { toast("Assessment not found.", "bad"); return; }
+  const a = snap.val();
+  $("edit-id").value          = id;
+  $("edit-name").value        = a.name || "";
+  $("edit-timer").value       = a.timer || 25;
+  $("edit-qcount").value      = a.qCount || 7;
+  $("edit-idqcount").value    = a.idQCount || 1;
+  $("edit-random").checked    = a.randomize !== false;
+  $("edit-modal").classList.remove("hidden");
+  setTimeout(()=>$("edit-name").focus(), 50);
+};
+window.closeEditModal = () => $("edit-modal").classList.add("hidden");
+
+window.saveEditAssessment = async () => {
+  const id              = $("edit-id").value;
+  const name            = $("edit-name").value.trim();
+  const timer           = parseInt($("edit-timer").value)  || 25;
+  const qCount          = parseInt($("edit-qcount").value)   || 7;
+  const idQCount        = parseInt($("edit-idqcount").value) || 1;
+  const randomize       = $("edit-random").checked;
+  if (!name) { toast("Name cannot be empty.", "bad"); return; }
+  try {
+    const snap    = await get(ref(db,`assessments/${id}`));
+    const existing = snap.val() || {};
+    await set(ref(db,`assessments/${id}`), { ...existing, name, timer, qCount, idQCount, randomize });
+    toast(`✓ "${name}" updated!`, "ok");
+    closeEditModal();
+    await loadAssessments();
+    if (curAsmId === id) { curAsmName = name; $("q-ctx") && ($("q-ctx").textContent = name); }
+  } catch(e) {
+    console.error("saveEdit:", e);
+    toast("Error: "+e.message, "bad");
+  }
+};
+
+// ── delete assessment ──────────────────────────────
+window.deleteAssessment = async (id, name) => {
+  if (!confirm(`Delete "${name}"?\n\nAll its questions will also be deleted.`)) return;
+  toast("Deleting…","inf");
+  try {
+    // cascade delete questions
+    const snap = await get(ref(db,"questions"));
+    if (snap.exists()) {
+      const toDelete = Object.keys(snap.val()).filter(k => snap.val()[k].assessmentId === id);
+      await Promise.all(toDelete.map(k => remove(ref(db,`questions/${k}`))));
+    }
+    await remove(ref(db,`assessments/${id}`));
+    if (curAsmId===id) { curAsmId=""; curAsmName=""; $("asm-sel").value=""; }
+    toast(`"${name}" deleted.`, "ok");
+    await loadAssessments();
+    loadSubmissions();
+  } catch(e) {
+    console.error("deleteAssessment:", e);
+    toast("Delete failed: "+e.message, "bad");
+  }
+};
+
+// ── load questions ─────────────────────────────────
+async function loadQuestions() {
+  if (!curAsmId) return;
+  try {
+    const snap = await get(ref(db,"questions"));
+    const qs   = snap2arr(snap).filter(q => q.assessmentId === curAsmId);
+    $("q-cnt").textContent=`${qs.length}`;
+
+    const fmtBadge = { mcq:"bg-blue-500/20 text-blue-400 border-blue-500/30", fill_blank:"bg-purple-500/20 text-purple-400 border-purple-500/30", text:"bg-amber-500/20 text-amber-400 border-amber-500/30" };
+    const fmtLabel = { mcq:"MCQ", fill_blank:"Fill Blank", text:"Text" };
+    const el=$("q-list");
+    _allQuestions = qs; // cache for edit
+
+    const idQs  = qs.filter(q=>q.isIdentifier);
+    const regQs = qs.filter(q=>!q.isIdentifier);
+
+    if (!qs.length) { el.innerHTML=`<p class="text-slate-500 text-sm text-center py-10">No questions yet. Add one ←</p>`; return; }
+    el.innerHTML="";
+
+    const renderQ = (q, isId) => {
+      const card=document.createElement("div");
+      card.className=`border hover:border-slate-600 rounded-xl p-4 transition-colors ${isId?"bg-indigo-950/40 border-indigo-700/50":"bg-slate-700/30 border-slate-700"}`;
+      card.innerHTML=`
+        <div class="flex items-start justify-between gap-2 mb-2">
+          <div class="flex gap-1.5 flex-wrap">
+            ${isId?`<span class="text-xs border px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border-indigo-500/30">🔍 ${esc(q.identifierGroup||"Identifier")}</span>`:""}
+            <span class="text-xs border px-2 py-0.5 rounded-full ${fmtBadge[q.format]||""}">${fmtLabel[q.format]||q.format}</span>
+          </div>
+          <div class="flex gap-1.5 shrink-0">
+            <button onclick="openEditQuestion('${q.id}')" class="text-xs text-blue-400 hover:text-blue-300 px-2 py-1 bg-blue-500/10 hover:bg-blue-500/20 rounded-lg transition-colors">Edit</button>
+            <button onclick="deleteQuestion('${q.id}')" class="text-xs text-red-400 hover:text-red-300 px-2 py-1 bg-red-500/10 hover:bg-red-500/20 rounded-lg transition-colors">Delete</button>
+          </div>
+        </div>
+        ${isId?`<p class="font-mono text-indigo-300 text-sm font-semibold mb-1">${esc(q.identifier)}</p>`:""}
+        <p class="text-sm text-slate-200 mb-1.5 line-clamp-3">${esc(q.question)}</p>
+        <p class="text-xs text-slate-500">✓ <span class="text-slate-400">${(q.correct_answers||[]).map(esc).join(", ")}</span></p>
+        ${q.options?`<p class="text-xs text-slate-600 mt-0.5">Opts: ${q.options.map(esc).join(" · ")}</p>`:""}`;
+      el.appendChild(card);
+    };
+
+    if (idQs.length) {
+      const sep=document.createElement("p");
+      sep.className="text-xs text-indigo-400 uppercase tracking-widest mb-2";
+      sep.textContent=`🔍 Identifier Questions (${idQs.length}) — round-robin assigned`;
+      el.appendChild(sep);
+      idQs.forEach(q=>renderQ(q,true));
+      if (regQs.length) {
+        const sep2=document.createElement("p");
+        sep2.className="text-xs text-slate-500 uppercase tracking-widest mt-4 mb-2";
+        sep2.textContent=`Regular Questions (${regQs.length})`;
+        el.appendChild(sep2);
+      }
+    }
+    regQs.forEach(q=>renderQ(q,false));
+  } catch(e) {
+    console.error("loadQuestions:", e);
+    $("q-list").innerHTML=`<p class="text-red-400 text-sm text-center py-6">Error: ${esc(e.message)}</p>`;
+  }
+}
+
+// ── add question ───────────────────────────────────
+window.addQuestion = async (e) => {
+  e.preventDefault();
+  if (!curAsmId) { toast("Select an assessment first.", "bad"); return; }
+  const fmt          = $("q-fmt").value;
+  const txt          = $("q-txt").value.trim();
+  const corr         = $("q-correct").value.trim();
+  const isIdentifier    = $("q-is-id").checked;
+  const identifier      = isIdentifier ? $("q-id-val").value.trim()    : "";
+  const identifierGroup = isIdentifier ? $("q-id-group").value.trim()  : "";
+
+  if (!txt) { toast("Question text is required.", "bad"); return; }
+  if (fmt==="mcq" && !corr) { toast("MCQ requires correct answer(s).", "bad"); return; }
+  if (fmt==="fill_blank" && !txt.includes("___")) { toast("Fill Blank needs ___ placeholder.", "bad"); return; }
+  if (isIdentifier && !identifier)      { toast("Enter an identifier value (e.g. PAY_001).", "bad"); return; }
+  if (isIdentifier && !identifierGroup) { toast("Enter a group name (e.g. Intent URL).", "bad"); return; }
+
+  const correct_answers = corr.split(",").map(s=>s.trim()).filter(Boolean);
+
+  // For identifier questions: split by comma → one question doc per identifier
+  const identifiers = isIdentifier
+    ? identifier.split(",").map(s=>s.trim()).filter(Boolean)
+    : [""];   // non-identifier → single entry with empty identifier
+
+  const baseData = { assessmentId:curAsmId, format:fmt, question:txt, correct_answers, isIdentifier, identifierGroup };
+
+  if (fmt==="mcq") {
+    const opts = Array.from(document.querySelectorAll(".opt")).map(o=>o.value.trim()).filter(Boolean);
+    if (opts.length<2) { toast("Add at least 2 options.", "bad"); return; }
+    baseData.options = opts;
+  }
+
+  const btn=e.submitter||document.querySelector("#q-form button[type=submit]");
+  btn.disabled=true;
+  btn.textContent = identifiers.length > 1 ? `Creating ${identifiers.length}…` : "Saving…";
+  toast(identifiers.length > 1 ? `Creating ${identifiers.length} questions…` : "Saving…", "inf");
+
+  try {
+    // Push one document per identifier (all share the same question/group/format)
+    await Promise.all(identifiers.map(id =>
+      push(ref(db,"questions"), { ...baseData, identifier: id })
+    ));
+    toast(identifiers.length > 1 ? `✓ ${identifiers.length} questions created!` : "✓ Question added!", "ok");
+    $("q-txt").value=""; $("q-correct").value=""; $("q-is-id").checked=false;
+    $("q-id-val").value=""; $("q-id-group").value="";
+    $("q-id-wrap").classList.add("hidden");
+    $("q-id-preview").classList.add("hidden");
+    resetOpts();
+    await loadQuestions();
+  } catch(err) {
+    console.error("addQuestion:", err);
+    toast("Error: "+err.message, "bad");
+  } finally {
+    btn.disabled=false; btn.textContent="Add Question";
+  }
+};
+
+// ── delete question ────────────────────────────────
+window.deleteQuestion = async (id) => {
+  if (!confirm("Delete this question?")) return;
+  try {
+    await remove(ref(db,`questions/${id}`));
+    toast("Question deleted.", "ok");
+    await loadQuestions();
+  } catch(e) {
+    console.error("deleteQuestion:", e);
+    toast("Error: "+e.message, "bad");
+  }
+};
+
+// ── edit question ──────────────────────────────────
+let _allQuestions = [];
+
+window.openEditQuestion = (id) => {
+  const q = _allQuestions.find(x => x.id === id);
+  if (!q) { toast("Question not found.", "bad"); return; }
+
+  $("eq-id").value         = id;
+  $("eq-fmt").value        = q.format || "mcq";
+  $("eq-txt").value        = q.question || "";
+  $("eq-correct").value    = (q.correct_answers||[]).join(", ");
+  $("eq-is-id").checked    = !!q.isIdentifier;
+  $("eq-id-group").value   = q.identifierGroup || "";
+  $("eq-id-val").value     = q.identifier || "";
+
+  // Rebuild options for MCQ
+  const optsEl = $("eq-opts");
+  optsEl.innerHTML = "";
+  if (q.format === "mcq") {
+    (q.options||[]).forEach(o => addEQOpt(o));
+  }
+
+  // Apply visibility rules
+  onEQFmtChange();
+  onEQIdToggle();
+
+  $("eq-modal").classList.remove("hidden");
+};
+
+window.closeEQModal = () => $("eq-modal").classList.add("hidden");
+
+window.onEQFmtChange = () => {
+  const fmt = $("eq-fmt").value;
+  $("eq-opts-wrap").style.display = fmt === "mcq" ? "block" : "none";
+  $("eq-blank-hint").classList.toggle("hidden", fmt !== "fill_blank");
+  const isTyped = fmt === "text" || fmt === "fill_blank";
+  $("eq-correct-hint").classList.toggle("hidden", !isTyped);
+  $("eq-correct-label").innerHTML = isTyped
+    ? `Expected Answers <span class="text-slate-600 normal-case">(optional — hint for grading)</span>`
+    : `Correct Answers <span class="text-slate-600 normal-case">(comma-separated)</span>`;
+};
+
+window.onEQIdToggle = () => {
+  $("eq-id-wrap").classList.toggle("hidden", !$("eq-is-id").checked);
+};
+
+window.addEQOpt = (val = "") => {
+  const wrap = document.createElement("div");
+  wrap.className = "flex gap-2";
+  const n = $("eq-opts").children.length;
+  const labels = "ABCDEFGHIJ";
+  wrap.innerHTML = `
+    <input type="text" value="${esc(val)}" placeholder="Option ${labels[n]||n+1}"
+      class="eq-opt flex-1 bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 transition text-sm">
+    <button type="button" onclick="this.parentElement.remove()" class="text-slate-600 hover:text-red-400 px-1 text-xl transition-colors">×</button>`;
+  $("eq-opts").appendChild(wrap);
+};
+
+window.saveEditQuestion = async () => {
+  const id  = $("eq-id").value;
+  const fmt = $("eq-fmt").value;
+  const txt = $("eq-txt").value.trim();
+  const corr = $("eq-correct").value.trim();
+  const isIdentifier    = $("eq-is-id").checked;
+  const identifier      = isIdentifier ? $("eq-id-val").value.trim()   : "";
+  const identifierGroup = isIdentifier ? $("eq-id-group").value.trim() : "";
+
+  if (!txt) { toast("Question text is required.", "bad"); return; }
+  if (fmt === "mcq" && !corr) { toast("MCQ requires correct answer(s).", "bad"); return; }
+  if (fmt === "fill_blank" && !txt.includes("___")) { toast("Fill Blank needs ___ placeholder.", "bad"); return; }
+  if (isIdentifier && !identifier)      { toast("Enter an identifier value.", "bad"); return; }
+  if (isIdentifier && !identifierGroup) { toast("Enter a group name.", "bad"); return; }
+
+  const q = _allQuestions.find(x => x.id === id);
+  const correct_answers = corr.split(",").map(s=>s.trim()).filter(Boolean);
+
+  // Split identifiers by comma — same as Add form
+  const identifiers = isIdentifier
+    ? identifier.split(",").map(s=>s.trim()).filter(Boolean)
+    : [""];
+
+  const baseData = {
+    assessmentId: q.assessmentId,
+    format: fmt, question: txt, correct_answers,
+    isIdentifier, identifierGroup
+  };
+
+  if (fmt === "mcq") {
+    const opts = Array.from(document.querySelectorAll(".eq-opt")).map(o=>o.value.trim()).filter(Boolean);
+    if (opts.length < 2) { toast("Add at least 2 options.", "bad"); return; }
+    baseData.options = opts;
+  }
+
+  const btn = event.target;
+  btn.disabled = true;
+  btn.textContent = identifiers.length > 1 ? `Saving ${identifiers.length}…` : "Saving…";
+  try {
+    // Update the existing question with the first identifier
+    await set(ref(db, `questions/${id}`), { ...baseData, identifier: identifiers[0] || "" });
+    // Create new questions for any additional identifiers
+    if (identifiers.length > 1) {
+      await Promise.all(identifiers.slice(1).map(ident =>
+        push(ref(db, "questions"), { ...baseData, identifier: ident })
+      ));
+    }
+    toast(identifiers.length > 1 ? `✓ Updated + ${identifiers.length - 1} new question(s) created!` : "✓ Question updated!", "ok");
+    closeEQModal();
+    await loadQuestions();
+  } catch(e) {
+    console.error("saveEditQuestion:", e);
+    toast("Error: " + e.message, "bad");
+  } finally {
+    btn.disabled = false; btn.textContent = "Save Changes";
+  }
+};
+
+// ── load submissions ───────────────────────────────
+async function loadSubmissions() {
+  try {
+    const snap = await get(ref(db,"submissions"));
+    let subs   = snap2arr(snap);
+    if (curAsmId) subs = subs.filter(s => s.asmId === curAsmId);
+    // sort by score desc
+    subs.sort((a,b)=>b.score-a.score);
+    $("sub-cnt").textContent=`${subs.length}`;
+
+    const avg  = subs.length ? Math.round(subs.reduce((s,x)=>s+(x.score/x.total*100),0)/subs.length) : 0;
+    const top  = subs.length ? subs[0].score : 0;
+    const topA = subs.length ? subs[0].agentName : "—";
+    $("stats").innerHTML=`
+      <div class="bg-slate-800 border border-slate-700 rounded-xl p-4"><p class="text-xs text-slate-400 uppercase tracking-wide mb-1">Attempts</p><p class="text-3xl font-bold text-white">${subs.length}</p></div>
+      <div class="bg-slate-800 border border-slate-700 rounded-xl p-4"><p class="text-xs text-slate-400 uppercase tracking-wide mb-1">Avg Score</p><p class="text-3xl font-bold text-white">${avg}%</p></div>
+      <div class="bg-slate-800 border border-slate-700 rounded-xl p-4"><p class="text-xs text-slate-400 uppercase tracking-wide mb-1">Top Score</p><p class="text-3xl font-bold text-white">${top} pts</p></div>
+      <div class="bg-slate-800 border border-slate-700 rounded-xl p-4"><p class="text-xs text-slate-400 uppercase tracking-wide mb-1">Top Agent</p><p class="text-xl font-bold text-white truncate">${esc(topA)}</p></div>`;
+
+    const tbody=$("sub-body");
+    if (!subs.length) { tbody.innerHTML=`<tr><td colspan="8" class="px-6 py-10 text-center text-slate-500">No submissions yet.</td></tr>`; return; }
+    tbody.innerHTML="";
+    subs.forEach((s,i)=>{
+      const pct=Math.round(s.score/s.total*100);
+      const ts=s.ts ? new Date(s.ts).toLocaleString("en-IN") : "—";
+      const medal=["🥇","🥈","🥉"][i]??`#${i+1}`;
+      const col=pct>=70?"text-green-400":pct>=40?"text-yellow-400":"text-red-400";
+      const tr=document.createElement("tr");
+      tr.className="border-b border-slate-700/40 hover:bg-slate-700/20 transition-colors";
+      tr.innerHTML=`
+        <td class="px-5 py-4">${medal}</td>
+        <td class="px-5 py-4 font-medium text-white text-sm">${esc(s.agentName)}</td>
+        <td class="px-5 py-4 text-xs text-slate-400">${esc(s.asmName||"—")}</td>
+        <td class="px-5 py-4"><span class="font-mono text-xs ${s.identifierValue?"text-indigo-300 bg-indigo-900/30 border border-indigo-700/30 px-2 py-0.5 rounded":"text-slate-600"}">${s.identifierValue||"—"}</span></td>
+        <td class="px-5 py-4 font-mono">${s.score}/${s.total}${s.pending?` <span class="text-yellow-400 text-xs">(${s.pending}⏳)</span>`:""}</td>
+        <td class="px-5 py-4"><span class="${col} font-semibold">${pct}%</span></td>
+        <td class="px-5 py-4 text-xs text-slate-400">${ts}</td>
+        <td class="px-5 py-4">
+          <div class="flex gap-1.5">
+            <button onclick='showDetail(${JSON.stringify(s).replace(/'/g,"&#39;")})' class="text-xs text-blue-400 hover:text-blue-300 px-2 py-1 bg-blue-500/10 rounded-lg transition-colors">View</button>
+            <button onclick="deleteSubmission('${s.id}')" class="text-xs text-red-400 hover:text-red-300 px-2 py-1 bg-red-500/10 hover:bg-red-500/20 rounded-lg transition-colors">Del</button>
+          </div>
+        </td>`;
+      tbody.appendChild(tr);
+    });
+  } catch(e) {
+    console.error("loadSubmissions:", e);
+    $("sub-body").innerHTML=`<tr><td colspan="8" class="px-6 py-8 text-center text-red-400">${esc(e.message)}</td></tr>`;
+  }
+}
+
+// ── delete submission ──────────────────────────────
+window.deleteSubmission = async (id) => {
+  if (!confirm("Delete this submission? The agent will be able to retake the assessment.")) return;
+  try {
+    await remove(ref(db,`submissions/${id}`));
+    toast("Submission deleted.", "ok");
+    await loadSubmissions();
+  } catch(e) {
+    console.error("deleteSubmission:", e);
+    toast("Error: "+e.message, "bad");
+  }
+};
+
+// ── detail modal ───────────────────────────────────
+let _modalSub = null;
+
+window.showDetail = (sub) => {
+  _modalSub = sub;
+  renderModal("all");
+  $("modal").classList.remove("hidden");
+};
+
+function renderModal(mode) {
+  const sub     = _modalSub;
+  const answers = sub.answers || [];
+  const wrong   = answers.filter(a=>a.isCorrect===false).length;
+  const correct = answers.filter(a=>a.isCorrect===true).length;
+  const pending = answers.filter(a=>a.isCorrect==="pending").length;
+
+  const subset  = mode==="wrong"   ? answers.filter(a=>a.isCorrect===false)
+                : mode==="right"   ? answers.filter(a=>a.isCorrect===true)
+                : mode==="pending" ? answers.filter(a=>a.isCorrect==="pending")
+                : answers;
+
+  const tabCls = (t) => t===mode
+    ? "px-3 py-1 text-xs font-medium rounded-lg bg-blue-600 text-white"
+    : "px-3 py-1 text-xs font-medium rounded-lg bg-slate-700 text-slate-400 hover:bg-slate-600";
+
+  const scoreText = pending>0 ? `${sub.score}/${sub.total-pending} auto · ${pending} pending` : `${sub.score}/${sub.total}`;
+
+  $("modal-body").innerHTML=`
+    <div class="mb-4">
+      <p class="text-sm text-white font-semibold">${esc(sub.agentName)}</p>
+      <p class="text-xs text-slate-400 mt-0.5">${esc(sub.asmName||"—")} · Score: <span class="font-mono text-white">${scoreText}</span></p>
+      ${sub.identifierValue ? `<div class="inline-flex items-center gap-2 mt-1.5 bg-indigo-950/60 border border-indigo-700/50 rounded-lg px-3 py-1"><span class="text-xs text-indigo-400">Debugging ID:</span><span class="font-mono text-indigo-200 font-semibold text-sm">${esc(sub.identifierValue)}</span></div>` : ""}
+      <div class="flex gap-2 mt-2 flex-wrap">
+        <span class="text-xs bg-green-900/40 text-green-400 border border-green-700/40 px-2 py-0.5 rounded-full">✅ ${correct} correct</span>
+        <span class="text-xs bg-red-900/40   text-red-400   border border-red-700/40   px-2 py-0.5 rounded-full">❌ ${wrong} wrong</span>
+        ${pending>0?`<span class="text-xs bg-yellow-900/40 text-yellow-400 border border-yellow-700/40 px-2 py-0.5 rounded-full">⏳ ${pending} pending</span>`:""}
+      </div>
+    </div>
+
+    <!-- filter tabs -->
+    <div class="flex gap-2 mb-3 flex-wrap">
+      <button onclick="renderModal('all')"     class="${tabCls('all')}">All</button>
+      <button onclick="renderModal('wrong')"   class="${tabCls('wrong')}">❌ Wrong (${wrong})</button>
+      <button onclick="renderModal('right')"   class="${tabCls('right')}">✅ Correct (${correct})</button>
+      ${pending>0?`<button onclick="renderModal('pending')" class="${tabCls('pending')}">⏳ Pending (${pending})</button>`:""}
+    </div>
+
+    <div class="space-y-2">
+    ${!subset.length
+      ? `<p class="text-slate-500 text-sm text-center py-6">${mode==="wrong"?"No wrong answers 🎉":mode==="pending"?"No pending answers":"No correct answers"}</p>`
+      : subset.map((a) => {
+          const i = answers.indexOf(a);
+          // shared answer bubble — scrollable block for long text
+          const ansBlock = (text, colorCls) =>
+            `<div class="mt-1.5 rounded-lg px-3 py-2 text-xs font-mono break-words whitespace-pre-wrap max-h-32 overflow-y-auto ${colorCls}">${esc(text||"(blank)")}</div>`;
+
+          if (a.isCorrect===true) {
+            return `
+            <div class="bg-slate-700/30 border border-green-800/40 rounded-xl p-3">
+              <div class="flex items-start justify-between gap-2 mb-1">
+                <p class="text-xs text-slate-300 font-medium leading-snug">Q${i+1}. ${esc(a.question)}</p>
+                <span class="shrink-0 text-base ml-2">✅</span>
+              </div>
+              <p class="text-xs text-slate-500 mb-0.5">Answer:</p>
+              ${ansBlock(a.userAnswer, "bg-green-900/40 text-green-300 border border-green-700/40")}
+            </div>`;
+          } else if (a.isCorrect==="pending") {
+            return `
+            <div class="bg-slate-700/30 border border-yellow-700/40 rounded-xl p-3">
+              <div class="flex items-start justify-between gap-2 mb-1">
+                <p class="text-xs text-white font-semibold leading-snug">Q${i+1}. ${esc(a.question)}</p>
+                <span class="shrink-0 text-xs bg-yellow-500/20 text-yellow-400 border border-yellow-600/40 px-2 py-0.5 rounded-full ml-2 whitespace-nowrap">⏳ Pending</span>
+              </div>
+              ${a.isIdentifier&&a.identifier?`<p class="text-xs text-indigo-400 mt-1 font-mono">🔍 ${esc(a.identifier)}</p>`:""}
+              <p class="text-xs text-slate-500 mt-1.5 mb-0.5">Agent answered:</p>
+              ${ansBlock(a.userAnswer, "bg-yellow-900/30 text-yellow-200 border border-yellow-700/40")}
+              ${(a.correctAnswers||[]).length?`<p class="text-xs text-slate-600 mt-1.5">Expected: ${(a.correctAnswers||[]).map(esc).join(", ")}</p>`:""}
+              <div class="flex gap-2 mt-2.5">
+                <button onclick="gradeAnswer('${sub.id}',${i},true)"  class="px-3 py-1.5 text-xs font-medium rounded-lg bg-green-700 hover:bg-green-600 text-white transition-colors">✅ Mark Correct</button>
+                <button onclick="gradeAnswer('${sub.id}',${i},false)" class="px-3 py-1.5 text-xs font-medium rounded-lg bg-red-700 hover:bg-red-600 text-white transition-colors">❌ Mark Wrong</button>
+              </div>
+            </div>`;
+          } else {
+            return `
+            <div class="bg-slate-700/30 border border-red-700/50 rounded-xl p-3">
+              <div class="flex items-start justify-between gap-2 mb-1">
+                <p class="text-xs text-white font-semibold leading-snug">Q${i+1}. ${esc(a.question)}</p>
+                <span class="shrink-0 text-base ml-2">❌</span>
+              </div>
+              <p class="text-xs text-slate-500 mt-1.5 mb-0.5">Answered:</p>
+              ${ansBlock(a.userAnswer, "bg-red-900/40 text-red-300 border border-red-700/40 line-through")}
+              ${(a.correctAnswers||[]).length?`<div class="mt-1.5"><p class="text-xs text-slate-500 mb-0.5">Correct:</p>${ansBlock(a.correctAnswers.join(" / "), "bg-green-900/40 text-green-300 border border-green-700/40")}</div>`:""}
+            </div>`;
+          }
+        }).join("")}
+    </div>`;
+}
+
+window.closeModal = () => { $("modal").classList.add("hidden"); _modalSub=null; };
+
+// ── grade a pending answer ────────────────────────
+window.gradeAnswer = async (subKey, ansIdx, isCorrect) => {
+  try {
+    // Update the specific answer's isCorrect in Firebase
+    await set(ref(db, `submissions/${subKey}/answers/${ansIdx}/isCorrect`), isCorrect);
+
+    // Recalculate score (count all true answers)
+    const snap = await get(ref(db, `submissions/${subKey}/answers`));
+    const allAns = snap.val() || [];
+    const newScore   = allAns.filter(a=>a.isCorrect===true).length;
+    const newPending = allAns.filter(a=>a.isCorrect==="pending").length;
+    await set(ref(db, `submissions/${subKey}/score`), newScore);
+    await set(ref(db, `submissions/${subKey}/pending`), newPending);
+
+    // Update local state so modal refreshes correctly
+    _modalSub.answers[ansIdx].isCorrect = isCorrect;
+    _modalSub.score   = newScore;
+    _modalSub.pending = newPending;
+
+    toast(isCorrect ? "✅ Marked correct" : "❌ Marked wrong", "ok");
+    renderModal("pending"); // stay on pending tab
+    await loadSubmissions(); // refresh leaderboard in background
+  } catch(e) {
+    console.error("gradeAnswer:", e);
+    toast("Error grading: "+e.message, "bad");
+  }
+};
+
+// ── form helpers ───────────────────────────────────
+window.onFmtChange = () => {
+  const fmt=$("q-fmt").value;
+  $("opts-wrap").style.display  = fmt==="mcq"?"block":"none";
+  $("blank-hint").classList.toggle("hidden", fmt!=="fill_blank");
+  const isTyped = fmt==="text"||fmt==="fill_blank";
+  $("q-correct-hint").classList.toggle("hidden", !isTyped);
+  $("q-correct-label").innerHTML = isTyped
+    ? `Expected Answers <span class="text-slate-600 normal-case">(optional — hint for grading)</span>`
+    : `Correct Answers <span class="text-slate-600 normal-case">(comma-separated)</span>`;
+};
+window.onIdToggle = () => {
+  $("q-id-wrap").classList.toggle("hidden", !$("q-is-id").checked);
+};
+// live preview: show how many questions will be created
+document.addEventListener("DOMContentLoaded", () => {
+  const wirePreview = (inputId, previewId, isEdit) => {
+    $( inputId).addEventListener("input", () => {
+      const ids = $(inputId).value.split(",").map(s=>s.trim()).filter(Boolean);
+      const el  = $(previewId);
+      if (ids.length > 1) {
+        el.textContent = isEdit
+          ? `→ Updates this question with "${ids[0]}", creates ${ids.length-1} new question(s)`
+          : `→ Will create ${ids.length} questions`;
+        el.classList.remove("hidden");
+      } else {
+        el.classList.add("hidden");
+      }
+    });
+  };
+  wirePreview("q-id-val",  "q-id-preview",  false);
+  wirePreview("eq-id-val", "eq-id-preview", true);
+});
+window.addOpt = () => {
+  const labels="ABCDEFGHIJ";
+  const n=$("opts").children.length;
+  const row=document.createElement("div"); row.className="flex gap-2";
+  row.innerHTML=`<input type="text" placeholder="Option ${labels[n]||n+1}" class="opt flex-1 bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 transition text-sm"><button type="button" onclick="rmOpt(this)" class="text-slate-600 hover:text-red-400 px-1 text-xl">×</button>`;
+  $("opts").appendChild(row);
+};
+window.rmOpt = (btn) => { if($("opts").children.length<=2) return; btn.closest("div").remove(); };
+function resetOpts() {
+  $("opts").innerHTML=`
+    <div class="flex gap-2"><input type="text" placeholder="Option A" class="opt flex-1 bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 transition text-sm"><button type="button" onclick="rmOpt(this)" class="text-slate-600 hover:text-red-400 px-1 text-xl">×</button></div>
+    <div class="flex gap-2"><input type="text" placeholder="Option B" class="opt flex-1 bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 transition text-sm"><button type="button" onclick="rmOpt(this)" class="text-slate-600 hover:text-red-400 px-1 text-xl">×</button></div>`;
+}
+
+// ── export CSV ─────────────────────────────────────
+window.exportCSV = async () => {
+  toast("Preparing CSV…", "inf");
+  try {
+    const snap = await get(ref(db,"submissions"));
+    let subs   = snap2arr(snap);
+    if (curAsmId) subs = subs.filter(s => s.asmId === curAsmId);
+    subs.sort((a,b) => b.score - a.score);
+
+    if (!subs.length) { toast("No submissions to export.", "bad"); return; }
+
+    const rows = [
+      ["Rank","Agent Name","Assessment","Score","Total","Pending","Accuracy %","Identifier","Submitted At"]
+    ];
+    subs.forEach((s, i) => {
+      const pend = s.pending||0;
+      const autoT = s.total - pend;
+      const pct = autoT>0 ? Math.round((s.score / autoT) * 100) : 0;
+      const ts  = s.ts ? new Date(s.ts).toLocaleString("en-IN") : "";
+      rows.push([i+1, s.agentName, s.asmName||"", s.score, s.total, pend, pct+"%", s.identifierValue||"", ts]);
+    });
+
+    const csv = rows.map(r =>
+      r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(",")
+    ).join("\n");
+
+    const label    = curAsmName || "all-assessments";
+    const filename = `quizportal-${label.replace(/\s+/g,"-").toLowerCase()}-${new Date().toISOString().slice(0,10)}.csv`;
+    const blob     = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url      = URL.createObjectURL(blob);
+    const a        = document.createElement("a");
+    a.href = url; a.download = filename; a.click();
+    URL.revokeObjectURL(url);
+    toast(`✓ Exported ${subs.length} rows`, "ok");
+  } catch(e) {
+    console.error("exportCSV:", e);
+    toast("Export failed: "+e.message, "bad");
+  }
+};
+
+// ── refresh ────────────────────────────────────────
+window.refreshAll = async () => { await Promise.all([loadAssessments(), loadSubmissions()]); if(curAsmId) loadQuestions(); };
+
+// ── boot ───────────────────────────────────────────
+if (sessionStorage.getItem("ok")==="1") showPanel();
+else { $("s-login").classList.remove("hidden"); setTimeout(()=>$("inp-pw").focus(),100); }
+</script>
+</body>
+</html>

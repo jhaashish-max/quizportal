@@ -1,0 +1,12 @@
+{
+  "rules": {
+    ".read": true,
+    ".write": true,
+    "questions": {
+      ".indexOn": ["assessmentId"]
+    },
+    "submissions": {
+      ".indexOn": ["asmId"]
+    }
+  }
+}
