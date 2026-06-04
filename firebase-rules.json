@@ -1,12 +1,31 @@
 {
   "rules": {
-    ".read": true,
-    ".write": true,
+    "assessments": {
+      ".read": true,
+      ".write": true,
+      "$assessmentId": {
+        ".validate": "!newData.exists() || newData.hasChildren(['name', 'createdAt'])"
+      }
+    },
     "questions": {
-      ".indexOn": ["assessmentId"]
+      ".read": true,
+      ".write": true,
+      ".indexOn": ["assessmentId"],
+      "$questionId": {
+        ".validate": "!newData.exists() || newData.hasChildren(['assessmentId', 'question'])"
+      }
     },
     "submissions": {
-      ".indexOn": ["asmId"]
+      ".read": true,
+      ".write": true,
+      ".indexOn": ["asmId"],
+      "$submissionId": {
+        ".validate": "!newData.exists() || newData.hasChildren(['agentName', 'asmId'])"
+      }
+    },
+    "$other": {
+      ".read": false,
+      ".write": false
     }
   }
 }

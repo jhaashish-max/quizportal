@@ -919,7 +919,7 @@ async function loadSubmissions() {
         <td class="px-5 py-4 text-xs text-slate-400">${ts}</td>
         <td class="px-5 py-4">
           <div class="flex gap-1.5">
-            <button onclick='showDetail(${JSON.stringify(s).replace(/'/g,"&#39;")})' class="text-xs text-blue-400 hover:text-blue-300 px-2 py-1 bg-blue-500/10 rounded-lg transition-colors">View</button>
+            <button onclick='showDetail(${esc(JSON.stringify(s)).replace(/'/g,"&#39;")})' class="text-xs text-blue-400 hover:text-blue-300 px-2 py-1 bg-blue-500/10 rounded-lg transition-colors">View</button>
             <button onclick="deleteSubmission('${s.id}')" class="text-xs text-red-400 hover:text-red-300 px-2 py-1 bg-red-500/10 hover:bg-red-500/20 rounded-lg transition-colors">Del</button>
           </div>
         </td>`;
